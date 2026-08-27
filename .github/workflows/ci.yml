@@ -1,0 +1,117 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+env:
+  PYTHON_VERSION: "3.11"
+
+jobs:
+  lint:
+    name: Lint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Install lint tools
+        run: pip install ruff black sqlfluff sqlfluff-templater-dbt
+
+      - name: Ruff (ingestion service)
+        run: ruff check ingestion/ tests/
+
+      - name: Black --check (ingestion service)
+        run: black --check ingestion/ tests/
+
+      - name: SQLFluff (dbt models)
+        run: |
+          cd dbt
+          sqlfluff lint models --dialect clickhouse --ignore=templating
+
+  unit-tests:
+    name: Unit tests (ingestion)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Install dependencies
+        run: |
+          pip install -r ingestion/requirements.txt
+          pip install pytest pytest-cov
+
+      - name: Run pytest
+        run: pytest tests/ -v --cov=ingestion --cov-report=term-missing
+
+  dbt-build-test:
+    name: dbt build + test
+    runs-on: ubuntu-latest
+    needs: unit-tests
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Start ephemeral Postgres + ClickHouse
+        run: docker compose -f docker-compose.ci.yml up -d --wait
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Install dbt
+        run: pip install dbt-core dbt-clickhouse
+
+      - name: Seed raw tables with fixture data
+        run: |
+          docker compose -f docker-compose.ci.yml exec -T clickhouse \
+            clickhouse-client --multiquery < tests/fixtures/seed_raw.sql
+
+      - name: dbt build
+        working-directory: dbt
+        env:
+          CLICKHOUSE_HOST: localhost
+          CLICKHOUSE_PORT: "8123"
+          CLICKHOUSE_USER: default
+          CLICKHOUSE_PASSWORD: ""
+        run: dbt build --profiles-dir .
+
+      - name: dbt test
+        working-directory: dbt
+        env:
+          CLICKHOUSE_HOST: localhost
+          CLICKHOUSE_PORT: "8123"
+          CLICKHOUSE_USER: default
+          CLICKHOUSE_PASSWORD: ""
+        run: dbt test --profiles-dir .
+
+      - name: Tear down
+        if: always()
+        run: docker compose -f docker-compose.ci.yml down -v
+
+  build-image:
+    name: Build ingestion image
+    runs-on: ubuntu-latest
+    needs: [lint, unit-tests, dbt-build-test]
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build image
+        run: docker build -t pipeline-ingestion:${{ github.sha }} ./ingestion
+
+      - name: Tag latest
+        run: docker tag pipeline-ingestion:${{ github.sha }} pipeline-ingestion:latest
+
+      # Push step intentionally omitted -- wire to your registry
+      # (ECR/GHCR/Docker Hub) and add the corresponding login action +
+      # credentials as repo secrets before enabling.
+      - name: Push (placeholder)
+        run: echo "Add registry login + docker push here before enabling in production."
