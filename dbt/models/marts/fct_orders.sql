@@ -22,8 +22,8 @@ select
     o.product_id,
     p.category,
     o.quantity,
-    o.quantity * p.current_price as revenue,
-    o.order_ts
+    o.order_ts,
+    o.quantity * p.current_price as revenue
 from {{ ref('stg_orders') }} as o
 inner join {{ ref('dim_products') }} as p
     on o.product_id = p.product_id
