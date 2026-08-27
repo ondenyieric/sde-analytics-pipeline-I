@@ -1,4 +1,5 @@
 """REST API -> PostgreSQL ingestion with deterministic keys, rate limiting and metrics."""
+
 from __future__ import annotations
 
 import argparse
@@ -8,20 +9,45 @@ import sys
 import time
 from datetime import datetime, timezone
 from threading import Lock
+
 import psycopg2
 import psycopg2.extras
 import requests
 import yaml
-from prometheus_client import CollectorRegistry, Gauge, push_to_gateway, start_http_server
-from tenacity import retry, retry_if_exception_type, stop_after_attempt, wait_exponential
+from prometheus_client import (
+    CollectorRegistry,
+    Gauge,
+    push_to_gateway,
+    start_http_server,
+)
+from tenacity import (
+    retry,
+    retry_if_exception_type,
+    stop_after_attempt,
+    wait_exponential,
+)
 
-logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
+logging.basicConfig(
+    level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s"
+)
 log = logging.getLogger("ingest")
 
-LAST_SUCCESS_TS = Gauge("ingestion_last_success_timestamp_seconds", "Unix timestamp of the last successful ingestion run per resource", ["resource"])
-RUN_FAILURES = Gauge("ingestion_run_failure", "1 when the most recent ingestion run failed", ["resource"])
-ROWS_LAST_RUN = Gauge("ingestion_rows_last_run", "Rows upserted by the most recent run", ["resource"])
-RUN_SUCCESS = Gauge("ingestion_run_success", "1 when the most recent run succeeded, otherwise 0", ["resource"])
+LAST_SUCCESS_TS = Gauge(
+    "ingestion_last_success_timestamp_seconds",
+    "Unix timestamp of the last successful ingestion run per resource",
+    ["resource"],
+)
+RUN_FAILURES = Gauge(
+    "ingestion_run_failure", "1 when the most recent ingestion run failed", ["resource"]
+)
+ROWS_LAST_RUN = Gauge(
+    "ingestion_rows_last_run", "Rows upserted by the most recent run", ["resource"]
+)
+RUN_SUCCESS = Gauge(
+    "ingestion_run_success",
+    "1 when the most recent run succeeded, otherwise 0",
+    ["resource"],
+)
 
 
 class RateLimiter:
@@ -59,11 +85,11 @@ def pg_connect():
 def ensure_table(conn, resource: dict) -> None:
     cols_sql = ", ".join(f'"{c}" {t}' for c, t in resource["columns"].items())
     pk = resource["primary_key"]
-    ddl = f'''CREATE TABLE IF NOT EXISTS public."{resource['table']}" (
+    ddl = f"""CREATE TABLE IF NOT EXISTS public."{resource['table']}" (
         {cols_sql},
         _ingested_at TIMESTAMPTZ NOT NULL DEFAULT now(),
         PRIMARY KEY ("{pk}")
-    );'''
+    );"""
     with conn.cursor() as cur:
         cur.execute(ddl)
     conn.commit()
@@ -75,7 +101,14 @@ def ensure_table(conn, resource: dict) -> None:
     wait=wait_exponential(multiplier=1, min=2, max=30),
     retry=retry_if_exception_type(requests.RequestException),
 )
-def fetch_page(base_url: str, resource: dict, skip: int, headers: dict, timeout: int, limiter: RateLimiter) -> dict:
+def fetch_page(
+    base_url: str,
+    resource: dict,
+    skip: int,
+    headers: dict,
+    timeout: int,
+    limiter: RateLimiter,
+) -> dict:
     limiter.wait()
     url = f"{base_url.rstrip('/')}{resource['endpoint']}"
     params = {
@@ -87,7 +120,9 @@ def fetch_page(base_url: str, resource: dict, skip: int, headers: dict, timeout:
     return resp.json()
 
 
-def fetch_all(base_url: str, resource: dict, headers: dict, timeout: int, limiter: RateLimiter) -> list[dict]:
+def fetch_all(
+    base_url: str, resource: dict, headers: dict, timeout: int, limiter: RateLimiter
+) -> list[dict]:
     url = f"{base_url.rstrip('/')}{resource['endpoint']}"
     if not resource.get("paginated"):
         limiter.wait()
@@ -120,15 +155,21 @@ def flatten_orders(carts: list[dict]) -> list[dict]:
         for item in cart.get("products", []):
             product_id = item.get("id")
             if cart_id is None or product_id is None:
-                log.warning("Skipping malformed line item: cart_id=%s product_id=%s", cart_id, product_id)
+                log.warning(
+                    "Skipping malformed line item: cart_id=%s product_id=%s",
+                    cart_id,
+                    product_id,
+                )
                 continue
-            rows.append({
-                "id": f"{cart_id}:{product_id}",
-                "user_id": cart.get("userId"),
-                "product_id": product_id,
-                "quantity": item.get("quantity"),
-                "order_ts": now,
-            })
+            rows.append(
+                {
+                    "id": f"{cart_id}:{product_id}",
+                    "user_id": cart.get("userId"),
+                    "product_id": product_id,
+                    "quantity": item.get("quantity"),
+                    "order_ts": now,
+                }
+            )
     return rows
 
 
@@ -143,8 +184,8 @@ def upsert_rows(conn, resource: dict, rows: list[dict]) -> int:
     set_parts = [f'"{c}" = EXCLUDED."{c}"' for c in update_cols]
     set_parts.append('"_ingested_at" = now()')
     set_clause = ", ".join(set_parts)
-    sql = f'''INSERT INTO public."{resource['table']}" ({col_list}) VALUES %s
-        ON CONFLICT ("{pk}") DO UPDATE SET {set_clause};'''
+    sql = f"""INSERT INTO public."{resource['table']}" ({col_list}) VALUES %s
+        ON CONFLICT ("{pk}") DO UPDATE SET {set_clause};"""
     # PostgreSQL rejects a single INSERT ... ON CONFLICT statement when the
     # same constrained key occurs more than once in VALUES.  This can happen
     # with imperfect/upstream APIs (e.g. duplicate product lines in a cart).
@@ -167,9 +208,7 @@ def publish_metrics() -> None:
         return
     try:
         registry = CollectorRegistry()
-        metric_defs = (
-            LAST_SUCCESS_TS, RUN_FAILURES, ROWS_LAST_RUN, RUN_SUCCESS
-        )
+        metric_defs = (LAST_SUCCESS_TS, RUN_FAILURES, ROWS_LAST_RUN, RUN_SUCCESS)
         registry_metrics = {
             metric._name: Gauge(
                 metric._name,
@@ -191,9 +230,17 @@ def publish_metrics() -> None:
 
 def run_once(config_path: str) -> None:
     config = load_config(config_path)
-    base_url = os.environ.get("API_BASE_URL") or os.environ.get(config["api"]["base_url_env"], "https://dummyjson.com")
-    timeout = int(os.environ.get("API_TIMEOUT_SECONDS", config["api"].get("timeout_seconds", 15)))
-    rpm = int(os.environ.get("REQUESTS_PER_MINUTE", config["api"].get("requests_per_minute", 60)))
+    base_url = os.environ.get("API_BASE_URL") or os.environ.get(
+        config["api"]["base_url_env"], "https://dummyjson.com"
+    )
+    timeout = int(
+        os.environ.get("API_TIMEOUT_SECONDS", config["api"].get("timeout_seconds", 15))
+    )
+    rpm = int(
+        os.environ.get(
+            "REQUESTS_PER_MINUTE", config["api"].get("requests_per_minute", 60)
+        )
+    )
     limiter = RateLimiter(rpm)
     headers: dict[str, str] = {}
     api_key = os.environ.get("API_KEY")
@@ -205,9 +252,18 @@ def run_once(config_path: str) -> None:
         for resource in config["resources"]:
             name = resource["name"]
             try:
-                log.info("Fetching resource=%s from %s%s", name, base_url, resource["endpoint"])
+                log.info(
+                    "Fetching resource=%s from %s%s",
+                    name,
+                    base_url,
+                    resource["endpoint"],
+                )
                 raw_items = fetch_all(base_url, resource, headers, timeout, limiter)
-                rows = flatten_orders(raw_items) if resource.get("flatten_from") else raw_items
+                rows = (
+                    flatten_orders(raw_items)
+                    if resource.get("flatten_from")
+                    else raw_items
+                )
                 cols = resource["columns"].keys()
                 rows = [{c: r.get(c) for c in cols} for r in rows]
                 ensure_table(conn, resource)
@@ -229,7 +285,9 @@ def run_once(config_path: str) -> None:
 
 def main() -> int:
     parser = argparse.ArgumentParser()
-    parser.add_argument("--config", default=os.path.join(os.path.dirname(__file__), "config.yaml"))
+    parser.add_argument(
+        "--config", default=os.path.join(os.path.dirname(__file__), "config.yaml")
+    )
     parser.add_argument("--serve-metrics", action="store_true")
     parser.add_argument("--metrics-hold-seconds", type=int, default=0)
     args = parser.parse_args()
