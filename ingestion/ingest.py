@@ -296,7 +296,7 @@ def main() -> int:
     try:
         run_once(args.config)
     except Exception:
-        log.error("Ingestion run failed")
+        log.exception("Ingestion run failed")
         return 1
     if args.serve_metrics and args.metrics_hold_seconds:
         time.sleep(args.metrics_hold_seconds)

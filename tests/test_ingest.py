@@ -118,10 +118,12 @@ def test_upsert_rows_deduplicates_duplicate_primary_keys():
 
 
 def test_publish_metrics_passes_registry_to_pushgateway():
-    with patch.dict(os.environ, {"PUSHGATEWAY_URL": "http://pushgateway:9091"}):
-        with patch("ingest.push_to_gateway") as mocked_push:
-            ingest.ROWS_LAST_RUN.labels(resource="orders").set(3)
-            ingest.publish_metrics()
+    with (
+        patch.dict(os.environ, {"PUSHGATEWAY_URL": "http://pushgateway:9091"}),
+        patch("ingest.push_to_gateway") as mocked_push,
+    ):
+        ingest.ROWS_LAST_RUN.labels(resource="orders").set(3)
+        ingest.publish_metrics()
     assert mocked_push.call_count == 1
     assert mocked_push.call_args.kwargs["job"] == "analytics_ingestion"
     assert mocked_push.call_args.kwargs["registry"] is not None
