@@ -29,7 +29,7 @@ select
     product_id,
     quantity,
     order_ts,
-    todate(order_ts) as order_date
+    toDate(order_ts) as order_date
 from ranked
 where
     rn = 1
