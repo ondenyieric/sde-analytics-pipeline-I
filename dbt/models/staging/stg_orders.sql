@@ -29,7 +29,7 @@ select
     product_id,
     quantity,
     order_ts,
-    toDate(order_ts) as order_date
+    toDate(order_ts) as order_date -- noqa: CP03
 from ranked
 where
     rn = 1
