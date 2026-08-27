@@ -5,11 +5,17 @@ from unittest.mock import MagicMock, patch
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "ingestion"))
 
-import ingest  # noqa: E402
+import ingest
 
 
 def test_flatten_orders_uses_deterministic_order_line_key():
-    carts = [{"id": 1, "userId": 42, "products": [{"id": 10, "quantity": 2}, {"id": 11, "quantity": 1}]}]
+    carts = [
+        {
+            "id": 1,
+            "userId": 42,
+            "products": [{"id": 10, "quantity": 2}, {"id": 11, "quantity": 1}],
+        }
+    ]
     rows = ingest.flatten_orders(carts)
     assert [r["id"] for r in rows] == ["1:10", "1:11"]
     assert rows[0]["user_id"] == 42
@@ -26,22 +32,49 @@ def test_flatten_orders_is_stable_across_runs():
 
 
 def test_flatten_orders_skips_malformed_items():
-    carts = [{"id": 1, "userId": 42, "products": [{"quantity": 2}, {"id": 11, "quantity": 1}]}]
+    carts = [
+        {
+            "id": 1,
+            "userId": 42,
+            "products": [{"quantity": 2}, {"id": 11, "quantity": 1}],
+        }
+    ]
     rows = ingest.flatten_orders(carts)
     assert [r["id"] for r in rows] == ["1:11"]
 
 
 def test_fetch_all_stops_when_batch_reaches_total():
-    resource = {"endpoint": "/products", "list_key": "products", "paginated": True, "limit_param": "limit", "skip_param": "skip", "page_size": 2}
-    responses = [{"products": [{"id": 1}, {"id": 2}], "total": 3}, {"products": [{"id": 3}], "total": 3}]
+    resource = {
+        "endpoint": "/products",
+        "list_key": "products",
+        "paginated": True,
+        "limit_param": "limit",
+        "skip_param": "skip",
+        "page_size": 2,
+    }
+    responses = [
+        {"products": [{"id": 1}, {"id": 2}], "total": 3},
+        {"products": [{"id": 3}], "total": 3},
+    ]
     with patch("ingest.fetch_page", side_effect=responses) as mocked:
-        items = ingest.fetch_all("https://example.com", resource, headers={}, timeout=15, limiter=ingest.RateLimiter(0))
+        items = ingest.fetch_all(
+            "https://example.com",
+            resource,
+            headers={},
+            timeout=15,
+            limiter=ingest.RateLimiter(0),
+        )
     assert [i["id"] for i in items] == [1, 2, 3]
     assert mocked.call_count == 2
 
 
 def test_upsert_rows_excludes_immutable_columns_from_updates():
-    resource = {"table": "orders", "primary_key": "id", "immutable_columns": ["order_ts"], "columns": {"id": "TEXT", "quantity": "INTEGER", "order_ts": "TIMESTAMP"}}
+    resource = {
+        "table": "orders",
+        "primary_key": "id",
+        "immutable_columns": ["order_ts"],
+        "columns": {"id": "TEXT", "quantity": "INTEGER", "order_ts": "TIMESTAMP"},
+    }
     rows = [{"id": "1:10", "quantity": 2, "order_ts": datetime.now(timezone.utc)}]
     conn = MagicMock()
     with patch("ingest.psycopg2.extras.execute_values") as mocked_execute:
@@ -54,7 +87,12 @@ def test_upsert_rows_excludes_immutable_columns_from_updates():
 
 def test_upsert_rows_no_op_on_empty_rows():
     conn = MagicMock()
-    assert ingest.upsert_rows(conn, {"table": "x", "primary_key": "id", "columns": {"id": "INTEGER"}}, []) == 0
+    assert (
+        ingest.upsert_rows(
+            conn, {"table": "x", "primary_key": "id", "columns": {"id": "INTEGER"}}, []
+        )
+        == 0
+    )
     conn.cursor.assert_not_called()
 
 
@@ -80,10 +118,12 @@ def test_upsert_rows_deduplicates_duplicate_primary_keys():
 
 
 def test_publish_metrics_passes_registry_to_pushgateway():
-    with patch.dict(os.environ, {"PUSHGATEWAY_URL": "http://pushgateway:9091"}):
-        with patch("ingest.push_to_gateway") as mocked_push:
-            ingest.ROWS_LAST_RUN.labels(resource="orders").set(3)
-            ingest.publish_metrics()
+    with (
+        patch.dict(os.environ, {"PUSHGATEWAY_URL": "http://pushgateway:9091"}),
+        patch("ingest.push_to_gateway") as mocked_push,
+    ):
+        ingest.ROWS_LAST_RUN.labels(resource="orders").set(3)
+        ingest.publish_metrics()
     assert mocked_push.call_count == 1
     assert mocked_push.call_args.kwargs["job"] == "analytics_ingestion"
     assert mocked_push.call_args.kwargs["registry"] is not None

@@ -29,7 +29,7 @@ select
     category,
     price,
     stock,
-    if(_cdc_op = 'd', 1, 0) as is_deleted,
-    _cdc_ts as updated_at
+    _cdc_ts as updated_at,
+    if(_cdc_op = 'd', 1, 0) as is_deleted
 from ranked
 where rn = 1

@@ -72,16 +72,16 @@ jobs:
       - name: Seed raw tables with fixture data
         run: |
           docker compose -f docker-compose.ci.yml exec -T clickhouse \
-            clickhouse-client --multiquery < tests/fixtures/seed_raw.sql
+            clickhouse-client --password ci_password --multiquery < tests/fixtures/seed_raw.sql
 
-      - name: dbt build
+      - name: dbt run
         working-directory: dbt
         env:
           CLICKHOUSE_HOST: localhost
           CLICKHOUSE_PORT: "8123"
           CLICKHOUSE_USER: default
-          CLICKHOUSE_PASSWORD: ""
-        run: dbt build --profiles-dir .
+          CLICKHOUSE_PASSWORD: "ci_password"
+        run: dbt run --profiles-dir .
 
       - name: dbt test
         working-directory: dbt
@@ -89,7 +89,7 @@ jobs:
           CLICKHOUSE_HOST: localhost
           CLICKHOUSE_PORT: "8123"
           CLICKHOUSE_USER: default
-          CLICKHOUSE_PASSWORD: ""
+          CLICKHOUSE_PASSWORD: "ci_password"
         run: dbt test --profiles-dir .
 
       - name: Tear down

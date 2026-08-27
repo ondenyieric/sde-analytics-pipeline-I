@@ -1,5 +1,5 @@
 # End-to-End Analytics Engineering Pipeline
-
+![](docs/media/e28f528a618e783958b4566d7efaf2b57c0e143c.png)
 An analytics engineering pipeline that ingests data from a public REST API,
 replicates it into ClickHouse in near real time via Debezium CDC, and
 transforms it into analytics-ready and ML-ready datasets with dbt.
