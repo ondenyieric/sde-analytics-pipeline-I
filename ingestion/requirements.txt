@@ -1,0 +1,5 @@
+requests==2.32.3
+psycopg2-binary==2.9.9
+PyYAML==6.0.2
+tenacity==9.0.0
+prometheus-client==0.20.0

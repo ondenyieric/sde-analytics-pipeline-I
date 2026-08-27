@@ -1,0 +1,36 @@
+groups:
+  - name: pipeline-alerts
+    rules:
+      - alert: IngestionStale
+        expr: time() - ingestion_last_success_timestamp_seconds > 3600
+        for: 5m
+        labels:
+          severity: page
+        annotations:
+          summary: "Ingestion for {{ $labels.resource }} hasn't succeeded in over an hour"
+          description: "docs/design_report.docx §4.1 (data freshness) — check the ingestion service logs and upstream API status."
+
+      - alert: IngestionRunFailing
+        expr: ingestion_run_failure == 1
+        for: 0m
+        labels:
+          severity: warn
+        annotations:
+          summary: "Ingestion run failed for {{ $labels.resource }} in the last 15 minutes"
+
+      - alert: DbtTestFailures
+        expr: increase(dbt_test_failures_total[1h]) > 0
+        for: 0m
+        labels:
+          severity: warn
+        annotations:
+          summary: "One or more dbt tests failed in the last hour"
+          description: "See the dbt_test task logs in Airflow for which test(s) failed."
+
+      - alert: PostgresDown
+        expr: pg_up == 0
+        for: 1m
+        labels:
+          severity: page
+        annotations:
+          summary: "PostgreSQL (OLTP / CDC source) is unreachable"

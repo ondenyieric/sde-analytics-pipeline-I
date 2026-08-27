@@ -1,0 +1,43 @@
+version: 2
+
+models:
+  - name: dim_products
+    description: "Current product dimension, deduplicated to latest version per product."
+    columns:
+      - name: product_id
+        data_tests:
+          - unique
+          - not_null
+      - name: current_price
+        data_tests:
+          - not_null
+
+  - name: fct_orders
+    description: "One row per order line item, denormalized with product category and computed revenue."
+    columns:
+      - name: order_id
+        data_tests:
+          - unique
+          - not_null
+      - name: product_id
+        data_tests:
+          - not_null
+          - relationships:
+              to: ref('dim_products')
+              field: product_id
+      - name: revenue
+        data_tests:
+          - not_null
+
+  - name: mart_daily_sales
+    description: "Daily, per-category pre-aggregated sales rollup for dashboards."
+    columns:
+      - name: order_date
+        data_tests:
+          - not_null
+      - name: total_orders
+        data_tests:
+          - not_null
+      - name: total_revenue
+        data_tests:
+          - not_null

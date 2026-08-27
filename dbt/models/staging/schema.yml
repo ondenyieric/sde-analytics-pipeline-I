@@ -1,0 +1,36 @@
+version: 2
+
+models:
+  - name: stg_products
+    description: "Current state per product, derived from CDC history."
+    columns:
+      - name: product_id
+        data_tests:
+          - unique
+          - not_null
+      - name: title
+        data_tests:
+          - not_null
+      - name: category
+        data_tests:
+          - not_null
+      - name: price
+        data_tests:
+          - not_null
+
+  - name: stg_orders
+    description: "Current, non-deleted state per order line item, derived from CDC history."
+    columns:
+      - name: order_id
+        data_tests:
+          - unique
+          - not_null
+      - name: product_id
+        data_tests:
+          - not_null
+          - relationships:
+              to: ref('stg_products')
+              field: product_id
+      - name: quantity
+        data_tests:
+          - not_null

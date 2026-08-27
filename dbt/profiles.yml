@@ -1,0 +1,19 @@
+# Referenced via DBT_PROFILES_DIR=/opt/dbt (set in the Airflow DAG / CI job).
+# Uses dbt-clickhouse (pip install dbt-clickhouse).
+pipeline:
+  target: dev
+
+  outputs:
+    dev:
+      type: clickhouse
+      schema: mart
+      host: "{{ env_var('CLICKHOUSE_HOST', 'localhost') }}"
+      port: "{{ env_var('CLICKHOUSE_PORT', '8123') | as_number }}"
+      user: "{{ env_var('CLICKHOUSE_USER', 'default') }}"
+      password: "{{ env_var('CLICKHOUSE_PASSWORD', '') }}"
+      secure: false
+
+      threads: 2
+      retries: 3
+      connect_timeout: 10
+      send_receive_timeout: 300

@@ -1,0 +1,116 @@
+{
+  "title": "Pipeline Health",
+  "uid": "pipeline-health",
+  "timezone": "utc",
+  "schemaVersion": 39,
+  "version": 1,
+  "refresh": "30s",
+  "time": {
+    "from": "now-6h",
+    "to": "now"
+  },
+  "panels": [
+    {
+      "id": 1,
+      "title": "Data Freshness (seconds since last successful ingest)",
+      "type": "timeseries",
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 0
+      },
+      "targets": [
+        {
+          "expr": "time() - ingestion_last_success_timestamp_seconds",
+          "legendFormat": "{{resource}}"
+        }
+      ]
+    },
+    {
+      "id": 2,
+      "title": "Rows Ingested (Last Run)",
+      "type": "timeseries",
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 0
+      },
+      "targets": [
+        {
+          "expr": "ingestion_rows_last_run",
+          "legendFormat": "{{resource}}"
+        }
+      ]
+    },
+    {
+      "id": 3,
+      "title": "Kafka Consumer Group Lag (CDC)",
+      "type": "timeseries",
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 8
+      },
+      "targets": [
+        {
+          "expr": "kafka_consumergroup_lag{topic=~\"pipeline.*\"}",
+          "legendFormat": "{{topic}} / {{consumergroup}}"
+        }
+      ]
+    },
+    {
+      "id": 4,
+      "title": "dbt Test Failures / hour",
+      "type": "timeseries",
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 8
+      },
+      "targets": [
+        {
+          "expr": "increase(dbt_test_failures_total[1h])",
+          "legendFormat": "failures"
+        }
+      ]
+    },
+    {
+      "id": 5,
+      "title": "Postgres Replication Slot Lag (bytes)",
+      "type": "timeseries",
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 16
+      },
+      "targets": [
+        {
+          "expr": "pg_replication_slots_pg_wal_lsn_diff",
+          "legendFormat": "{{slot_name}}"
+        }
+      ]
+    },
+    {
+      "id": 7,
+      "title": "Airflow DAG Run Status (analytics_pipeline)",
+      "type": "timeseries",
+      "gridPos": {
+        "h": 8,
+        "w": 24,
+        "x": 0,
+        "y": 16
+      },
+      "targets": [
+        {
+          "expr": "airflow_dag_run_duration_seconds{dag_id=\"analytics_pipeline\"}",
+          "legendFormat": "run duration (s)"
+        }
+      ]
+    }
+  ]
+}

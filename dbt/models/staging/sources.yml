@@ -1,0 +1,18 @@
+version: 2
+
+sources:
+  - name: raw
+    schema: raw
+    tables:
+      - name: products
+        description: "Append-only CDC event history for the products table, one row per Debezium change event."
+        loaded_at_field: _ingested_at
+        freshness:
+          warn_after: { count: 15, period: minute }
+          error_after: { count: 60, period: minute }
+      - name: orders
+        description: "Append-only CDC event history for the orders (flattened cart line items) table."
+        loaded_at_field: _ingested_at
+        freshness:
+          warn_after: { count: 15, period: minute }
+          error_after: { count: 60, period: minute }

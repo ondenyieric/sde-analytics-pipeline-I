@@ -1,0 +1,45 @@
+# Maps public API resources -> Postgres tables.
+# Swap this file to point the pipeline at a different public REST API.
+
+api:
+  base_url_env: API_BASE_URL # env var name holding the base URL
+  requests_per_minute: 60
+  timeout_seconds: 15
+
+resources:
+  - name: products
+    endpoint: /products
+    # DummyJSON wraps results in {"products": [...], "total": N, "skip": N, "limit": N}
+    list_key: products
+    paginated: true
+    limit_param: limit
+    skip_param: skip
+    page_size: 100
+    primary_key: id
+    table: products
+    columns:
+      id: INTEGER
+      title: TEXT
+      category: TEXT
+      price: NUMERIC
+      stock: INTEGER
+
+  - name: orders
+    endpoint: /carts
+    list_key: carts
+    paginated: true
+    limit_param: limit
+    skip_param: skip
+    page_size: 100
+    primary_key: id
+    table: orders
+    # DummyJSON's /carts nests products; the ingestion script flattens
+    # cart -> one row per line item into `orders`.
+    flatten_from: products
+    immutable_columns: [order_ts]
+    columns:
+      id: TEXT
+      user_id: INTEGER
+      product_id: INTEGER
+      quantity: INTEGER
+      order_ts: TIMESTAMP
